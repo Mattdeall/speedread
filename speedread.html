@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SpeedRead — PDF Hızlı Okuyucu</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: rgba(255,255,255,0.08);
+    --accent: #6c63ff;
+    --accent2: #ff6584;
+    --text: #f0eeff;
+    --muted: rgba(240,238,255,0.4);
+    --word-size: clamp(32px, 5vw, 64px);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Georgia', serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── UPLOAD SCREEN ── */
+  #upload-screen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    padding: 2rem;
+  }
+
+  .logo { font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -0.02em; }
+  .logo span { color: var(--accent); }
+
+  .tagline {
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-family: sans-serif;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .upload-zone {
+    width: min(400px, 90vw);
+    border: 1.5px dashed rgba(108,99,255,0.35);
+    border-radius: 24px;
+    padding: 3rem 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.2rem;
+    cursor: pointer;
+    background: rgba(108,99,255,0.04);
+    transition: all 0.2s;
+  }
+  .upload-zone:hover, .upload-zone.drag {
+    border-color: var(--accent);
+    background: rgba(108,99,255,0.1);
+    transform: translateY(-2px);
+  }
+
+  .upload-icon {
+    width: 64px; height: 64px;
+    background: rgba(108,99,255,0.15);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2rem;
+  }
+
+  .upload-zone strong { font-size: 1.1rem; font-family: sans-serif; }
+  .upload-zone p { font-size: 0.85rem; color: var(--muted); font-family: sans-serif; text-align: center; line-height: 1.6; }
+
+  #file-input { display: none; }
+
+  .tips {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-family: sans-serif;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 380px;
+    text-align: center;
+    line-height: 1.7;
+  }
+
+  #error-msg {
+    display: none;
+    color: var(--accent2);
+    font-size: 0.85rem;
+    font-family: sans-serif;
+    text-align: center;
+    padding: 0.5rem 1rem;
+    background: rgba(255,101,132,0.1);
+    border-radius: 8px;
+  }
+
+  /* ── READER SCREEN ── */
+  #reader-screen {
+    display: none;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.5rem;
+    border-bottom: 0.5px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    gap: 1rem;
+  }
+
+  .back-btn {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 1.4rem; padding: 4px; line-height: 1;
+    transition: color 0.15s;
+  }
+  .back-btn:hover { color: var(--text); }
+
+  .doc-title {
+    font-size: 0.82rem; color: var(--muted); font-family: sans-serif;
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    text-align: center;
+  }
+
+  .progress-text {
+    font-size: 0.78rem; color: var(--muted); font-family: sans-serif;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+
+  /* ── WORD STAGE ── */
+  .word-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 2rem;
+    overflow: hidden;
+  }
+
+  .focus-frame {
+    position: absolute;
+    width: min(600px, 88vw);
+    height: 90px;
+    border: 1.5px solid rgba(108,99,255,0.18);
+    border-radius: 16px;
+    pointer-events: none;
+  }
+  .focus-frame::before, .focus-frame::after {
+    content: '';
+    position: absolute;
+    top: -10px;
+    width: 2px;
+    height: 8px;
+    background: var(--accent);
+    opacity: 0.7;
+    border-radius: 2px;
+  }
+  .focus-frame::before { left: 28%; }
+  .focus-frame::after  { right: calc(72% - 2px); }
+
+  #word-display {
+    font-size: var(--word-size);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    text-align: center;
+    z-index: 1;
+    line-height: 1;
+    min-height: 1.2em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #word-display .pv { color: var(--accent); font-weight: 700; }
+  #word-display .pre { color: var(--muted); }
+
+  .wpm-live {
+    position: absolute;
+    bottom: 2rem; right: 1.5rem;
+    font-size: 0.75rem; font-family: sans-serif;
+    color: var(--muted);
+    background: var(--surface2);
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 0.5px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .page-chip {
+    position: absolute;
+    bottom: 2rem; left: 1.5rem;
+    font-size: 0.72rem; font-family: sans-serif;
+    color: var(--muted);
+    background: var(--surface2);
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 0.5px solid var(--border);
+  }
+
+  /* ── CONTROLS ── */
+  .controls {
+    background: var(--surface);
+    border-top: 0.5px solid var(--border);
+    padding: 1rem 1.5rem 1.25rem;
+    flex-shrink: 0;
+  }
+
+  .progress-bar-wrap {
+    height: 44px;
+    background: transparent;
+    margin-bottom: 0.75rem;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+    touch-action: none;
+  }
+  .progress-bar-track {
+    position: absolute;
+    left: 0; right: 0;
+    height: 8px;
+    background: var(--surface2);
+    border-radius: 8px;
+    border: 0.5px solid var(--border);
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 8px;
+    width: 0%;
+    transition: width 0.12s linear;
+  }
+  .progress-bar-thumb {
+    position: absolute;
+    width: 20px; height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    top: 50%; transform: translate(-50%, -50%);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    pointer-events: none;
+    left: 0%;
+    transition: left 0.12s linear;
+  }
+
+  .wpm-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 1rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: 2px;
+  }
+  .wpm-row::-webkit-scrollbar { display: none; }
+  .wpm-label {
+    font-size: 0.72rem; font-family: sans-serif; color: var(--muted);
+    white-space: nowrap; flex-shrink: 0;
+  }
+
+  .wpm-btn {
+    flex-shrink: 0;
+    font-size: 0.78rem; font-family: sans-serif;
+    padding: 6px 13px;
+    border-radius: 20px;
+    border: 0.5px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-variant-numeric: tabular-nums;
+  }
+  .wpm-btn:hover { border-color: rgba(108,99,255,0.4); color: var(--text); }
+  .wpm-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  .btn-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+  }
+
+  .ctrl-btn {
+    background: var(--surface2);
+    border: 0.5px solid var(--border);
+    color: var(--text);
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  .ctrl-btn:hover { border-color: rgba(108,99,255,0.4); color: var(--text); }
+  .ctrl-btn:active { transform: scale(0.93); }
+  .skip-btn { width: 46px; height: 46px; }
+  .restart-btn { width: 46px; height: 46px; font-size: 1rem; }
+
+  .play-btn {
+    width: 68px; height: 68px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: none;
+    font-size: 1.6rem;
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 6px 28px rgba(108,99,255,0.45);
+    transition: all 0.15s;
+  }
+  .play-btn:hover { background: #7b73ff; box-shadow: 0 8px 32px rgba(108,99,255,0.55); }
+  .play-btn:active { transform: scale(0.93); box-shadow: none; }
+
+  /* ── LOADING ── */
+  #loading-overlay {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.25rem;
+    z-index: 999;
+  }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-msg { font-size: 0.9rem; color: var(--muted); font-family: sans-serif; }
+  .loading-sub { font-size: 0.75rem; color: rgba(240,238,255,0.25); font-family: sans-serif; }
+
+  /* keyboard hint */
+  .kb-hint {
+    text-align: center;
+    font-size: 0.7rem;
+    color: rgba(240,238,255,0.2);
+    font-family: sans-serif;
+    margin-top: 0.6rem;
+    letter-spacing: 0.03em;
+  }
+</style>
+</head>
+<body>
+
+<!-- UPLOAD -->
+<div id="upload-screen">
+  <div class="logo">Speed<span>Read</span></div>
+  <div class="tagline">Kelime kelime — ışık hızında</div>
+
+  <div class="upload-zone" id="drop-zone">
+    <div class="upload-icon">📄</div>
+    <strong>PDF Dosyası Yükle</strong>
+    <p>Dosyayı buraya sürükle bırak<br>ya da tıkla ve seç</p>
+  </div>
+
+  <div id="error-msg"></div>
+
+  <div class="tips">
+    Pivot okuma tekniği: Her kelimedeki <span style="color:var(--accent);font-weight:600">mor harf</span> gözünün odaklandığı nokta. 
+    Beyin zamanla bu noktayı işlemeye alışır ve hız dramatik artar.
+  </div>
+</div>
+
+<input type="file" id="file-input" accept="application/pdf">
+
+<!-- READER -->
+<div id="reader-screen">
+  <div class="top-bar">
+    <button class="back-btn" id="back-btn" title="Geri">&#8592;</button>
+    <div class="doc-title" id="doc-title">—</div>
+    <div class="progress-text" id="progress-text">0 / 0</div>
+  </div>
+
+  <div class="word-stage">
+    <div class="focus-frame"></div>
+    <div id="word-display"><span class="pre"></span><span class="pv">—</span><span></span></div>
+    <div class="wpm-live" id="wpm-live">200 WPM</div>
+    <div class="page-chip" id="page-chip">Sayfa —</div>
+  </div>
+
+  <div class="controls">
+    <div class="progress-bar-wrap" id="pb-wrap">
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="pb-fill"></div>
+      </div>
+      <div class="progress-bar-thumb" id="pb-thumb"></div>
+    </div>
+
+    <div class="wpm-row">
+      <span class="wpm-label">WPM:</span>
+      <button class="wpm-btn active" data-wpm="200">200</button>
+      <button class="wpm-btn" data-wpm="300">300</button>
+      <button class="wpm-btn" data-wpm="400">400</button>
+      <button class="wpm-btn" data-wpm="500">500</button>
+      <button class="wpm-btn" data-wpm="600">600</button>
+      <button class="wpm-btn" data-wpm="700">700</button>
+      <button class="wpm-btn" data-wpm="800">800</button>
+    </div>
+
+    <div class="btn-row">
+      <button class="ctrl-btn skip-btn" id="skip-back" title="50 kelime geri">&#10094;&#10094;</button>
+      <button class="ctrl-btn play-btn" id="play-btn">&#9654;</button>
+      <button class="ctrl-btn skip-btn" id="skip-fwd" title="50 kelime ileri">&#10095;&#10095;</button>
+    </div>
+
+    <div class="kb-hint">Boşluk: oynat/durdur &nbsp;·&nbsp; ← →: 50 kelime atla &nbsp;·&nbsp; ↑ ↓: hız</div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-msg" id="loading-msg">PDF işleniyor...</div>
+  <div class="loading-sub" id="loading-sub"></div>
+</div>
+
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const $ = id => document.getElementById(id);
+
+  let words = [], wordIndex = 0, wpm = 200;
+  let playing = false, timer = null;
+  let pageBreaks = []; // cumulative word counts per page
+
+  // ── Pivot index (RSVP optimal fixation point) ──
+  function pivotIdx(word) {
+    const n = word.length;
+    if (n <= 1) return 0;
+    if (n <= 5) return 1;
+    if (n <= 9) return 2;
+    return 3;
+  }
+
+  function renderWord(w) {
+    if (!w) return;
+    // Strip non-printable/zero-width chars
+    w = w.replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '');
+    if (!w) return;
+    const p = pivotIdx(w);
+    const pre  = w.slice(0, p);
+    const piv  = w[p] || '';
+    const post = w.slice(p + 1);
+    $('word-display').innerHTML =
+      `<span class="pre">${pre}</span><span class="pv">${piv}</span><span>${post}</span>`;
+  }
+
+  function updateProgress() {
+    if (!words.length) return;
+    const pct = (wordIndex / words.length * 100).toFixed(2);
+    $('pb-fill').style.width = pct + '%';
+    $('pb-thumb').style.left = pct + '%';
+    $('progress-text').textContent = wordIndex + ' / ' + words.length;
+
+    // find current page
+    let page = 0;
+    for (let i = 0; i < pageBreaks.length; i++) {
+      if (wordIndex <= pageBreaks[i]) { page = i; break; }
+      page = i;
+    }
+    $('page-chip').textContent = 'Sayfa ' + (page + 1) + ' / ' + pageBreaks.length;
+  }
+
+  function tick() {
+    if (wordIndex >= words.length) {
+      playing = false;
+      $('play-btn').innerHTML = '&#9654;';
+      $('play-btn').style.background = 'var(--accent)';
+      return;
+    }
+    renderWord(words[wordIndex]);
+    updateProgress();
+    wordIndex++;
+    timer = setTimeout(tick, Math.round(60000 / wpm));
+  }
+
+  function play() {
+    if (!words.length) return;
+    if (wordIndex >= words.length) wordIndex = 0;
+    playing = true;
+    $('play-btn').innerHTML = '&#9646;&#9646;';
+    tick();
+  }
+
+  function pause() {
+    clearTimeout(timer);
+    playing = false;
+    $('play-btn').innerHTML = '&#9654;';
+  }
+
+  function togglePlay() { playing ? pause() : play(); }
+
+  function setWpm(val) {
+    wpm = val;
+    $('wpm-live').textContent = val + ' WPM';
+    document.querySelectorAll('.wpm-btn').forEach(b => {
+      b.classList.toggle('active', +b.dataset.wpm === val);
+    });
+  }
+
+  function jump(delta) {
+    pause();
+    wordIndex = Math.max(0, Math.min(words.length - 1, wordIndex + delta));
+    renderWord(words[wordIndex]);
+    updateProgress();
+  }
+
+  // ── Events ──
+  document.querySelectorAll('.wpm-btn').forEach(b =>
+    b.addEventListener('click', () => setWpm(+b.dataset.wpm))
+  );
+  $('play-btn').addEventListener('click', togglePlay);
+  $('skip-back').addEventListener('click', () => jump(-50));
+  $('skip-fwd').addEventListener('click', () => jump(50));
+
+  function seekTo(clientX) {
+    const r = $('pb-wrap').getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    wordIndex = Math.floor(pct * words.length);
+    if (wordIndex >= words.length) wordIndex = words.length - 1;
+    renderWord(words[wordIndex]);
+    updateProgress();
+  }
+  let pbDragging = false;
+  $('pb-wrap').addEventListener('mousedown', e => {
+    pbDragging = true;
+    pause();
+    seekTo(e.clientX);
+  });
+  document.addEventListener('mousemove', e => {
+    if (!pbDragging) return;
+    seekTo(e.clientX);
+  });
+  document.addEventListener('mouseup', () => { pbDragging = false; });
+  $('pb-wrap').addEventListener('touchstart', e => {
+    pbDragging = true;
+    pause();
+    seekTo(e.touches[0].clientX);
+  }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!pbDragging) return;
+    seekTo(e.touches[0].clientX);
+  }, { passive: true });
+  document.addEventListener('touchend', () => { pbDragging = false; });
+
+  $('back-btn').addEventListener('click', () => {
+    pause();
+    words = []; wordIndex = 0; pageBreaks = [];
+    $('reader-screen').style.display = 'none';
+    $('upload-screen').style.display = 'flex';
+    $('error-msg').style.display = 'none';
+    $('file-input').value = '';
+    $('pb-fill').style.width = '0%';
+    $('progress-text').textContent = '0 / 0';
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if ($('reader-screen').style.display === 'none') return;
+    if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+    if (e.code === 'ArrowRight') jump(50);
+    if (e.code === 'ArrowLeft')  jump(-50);
+    if (e.code === 'ArrowUp') {
+      const speeds = [200,300,400,500,600,700,800];
+      const i = speeds.indexOf(wpm);
+      if (i < speeds.length - 1) setWpm(speeds[i + 1]);
+    }
+    if (e.code === 'ArrowDown') {
+      const speeds = [200,300,400,500,600,700,800];
+      const i = speeds.indexOf(wpm);
+      if (i > 0) setWpm(speeds[i - 1]);
+    }
+  });
+
+  // ── PDF Loading ──
+  async function loadPDF(file) {
+    $('loading-overlay').style.display = 'flex';
+    $('loading-msg').textContent = 'PDF yükleniyor...';
+    $('loading-sub').textContent = file.name;
+
+    try {
+      const ab = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+      const totalPages = pdf.numPages;
+      let allWords = [];
+      pageBreaks = [];
+
+      for (let p = 1; p <= totalPages; p++) {
+        $('loading-msg').textContent = `Sayfa ${p} / ${totalPages} işleniyor...`;
+        const page = await pdf.getPage(p);
+        const tc = await page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false });
+        // Use x-coordinate gaps to detect word boundaries (handles char-by-char PDFs)
+        let pageText = '';
+        let prevX2 = null, prevY = null;
+        for (let k = 0; k < tc.items.length; k++) {
+          const item = tc.items[k];
+          if (!item.str) continue;
+          const x = item.transform ? item.transform[4] : null;
+          const y = item.transform ? item.transform[5] : null;
+          const iw = item.width || 0;
+          if (prevX2 !== null && x !== null) {
+            const gap = x - prevX2;
+            const newLine = prevY !== null && Math.abs(y - prevY) > 2;
+            if (newLine || gap > 1) pageText += ' ';
+          }
+          pageText += item.str;
+          prevX2 = x !== null ? x + iw : null;
+          prevY = y;
+        }
+        const rawWords = pageText.split(/\s+/).filter(w => w.trim().length > 0);
+        // Merge isolated single chars that are likely split words (e.g. "h e l l o")
+        const pw = [];
+        let buf = '';
+        for (let m = 0; m < rawWords.length; m++) {
+          const cur = rawWords[m];
+          const next = rawWords[m + 1];
+          if (cur.length === 1 && next && next.length === 1) {
+            // accumulate
+            buf += cur;
+          } else if (cur.length === 1 && buf.length > 0) {
+            buf += cur;
+            pw.push(buf);
+            buf = '';
+          } else {
+            if (buf) { pw.push(buf); buf = ''; }
+            pw.push(cur);
+          }
+        }
+        if (buf) pw.push(buf);
+        allWords = allWords.concat(pw);
+        pageBreaks.push(allWords.length - 1);
+      }
+
+      words = allWords;
+      wordIndex = 0;
+      $('doc-title').textContent = file.name.replace(/\.pdf$/i, '');
+      renderWord(words[0]);
+      updateProgress();
+
+      $('loading-overlay').style.display = 'none';
+      $('upload-screen').style.display = 'none';
+      $('reader-screen').style.display = 'flex';
+    } catch (err) {
+      $('loading-overlay').style.display = 'none';
+      $('error-msg').textContent = '⚠ PDF okunamadı: ' + err.message;
+      $('error-msg').style.display = 'block';
+    }
+  }
+
+  // Drop zone
+  const dz = $('drop-zone');
+  dz.addEventListener('click', () => $('file-input').click());
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault(); dz.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type === 'application/pdf') {
+      loadPDF(f);
+    } else {
+      $('error-msg').textContent = '⚠ Lütfen bir PDF dosyası yükleyin.';
+      $('error-msg').style.display = 'block';
+    }
+  });
+
+  $('file-input').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (f) loadPDF(f);
+  });
+</script>
+</body>
+</html>
