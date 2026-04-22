@@ -3,367 +3,180 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>SpeedRead — PDF Hızlı Okuyucu</title>
+<title>SpeedRead</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root {
+  --bg: #0a0a0f;
+  --surface: #111118;
+  --surface2: #1a1a24;
+  --surface3: #20202e;
+  --border: rgba(255,255,255,0.07);
+  --border2: rgba(255,255,255,0.13);
+  --accent: #6c63ff;
+  --accent2: #ff6584;
+  --text: #f0eeff;
+  --muted: rgba(240,238,255,0.38);
+  --muted2: rgba(240,238,255,0.18);
+  --panel-w: 200px;
+  --mini-w: 140px;
+}
+body { background:var(--bg); color:var(--text); font-family:'Georgia',serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; user-select:none; }
 
-  :root {
-    --bg: #0a0a0f;
-    --surface: #111118;
-    --surface2: #1a1a24;
-    --border: rgba(255,255,255,0.08);
-    --accent: #6c63ff;
-    --accent2: #ff6584;
-    --text: #f0eeff;
-    --muted: rgba(240,238,255,0.4);
-    --word-size: clamp(32px, 5vw, 64px);
-  }
+/* ── UPLOAD ── */
+#upload-screen { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2rem; padding:2rem; }
+.logo { font-size:clamp(2rem,5vw,3rem); letter-spacing:-0.02em; }
+.logo span { color:var(--accent); }
+.tagline { font-size:.82rem; color:var(--muted); font-family:sans-serif; letter-spacing:.08em; text-transform:uppercase; }
+.upload-zone { width:min(400px,90vw); border:1.5px dashed rgba(108,99,255,.35); border-radius:24px; padding:3rem 2rem; display:flex; flex-direction:column; align-items:center; gap:1.2rem; cursor:pointer; background:rgba(108,99,255,.04); transition:all .2s; }
+.upload-zone:hover,.upload-zone.drag { border-color:var(--accent); background:rgba(108,99,255,.1); transform:translateY(-2px); }
+.upload-icon { width:64px; height:64px; background:rgba(108,99,255,.15); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:2rem; }
+.upload-zone strong { font-size:1.1rem; font-family:sans-serif; }
+.upload-zone p { font-size:.85rem; color:var(--muted); font-family:sans-serif; text-align:center; line-height:1.6; }
+#file-input { display:none; }
+.tips { font-size:.78rem; color:var(--muted); font-family:sans-serif; max-width:380px; text-align:center; line-height:1.7; }
+#error-msg { display:none; color:var(--accent2); font-size:.85rem; font-family:sans-serif; text-align:center; padding:.5rem 1rem; background:rgba(255,101,132,.1); border-radius:8px; }
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Georgia', serif;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    user-select: none;
-  }
+/* ── READER ── */
+#reader-screen { display:none; flex-direction:column; height:100vh; overflow:hidden; }
+.top-bar { display:flex; align-items:center; justify-content:space-between; padding:.65rem 1.25rem; border-bottom:.5px solid var(--border); background:var(--surface); flex-shrink:0; gap:1rem; }
+.back-btn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:1.3rem; padding:4px; line-height:1; transition:color .15s; }
+.back-btn:hover { color:var(--text); }
+.doc-title { font-size:.78rem; color:var(--muted); font-family:sans-serif; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:center; }
+.progress-text { font-size:.72rem; color:var(--muted); font-family:sans-serif; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.reader-body { flex:1; display:flex; overflow:hidden; min-height:0; }
 
-  /* ── UPLOAD SCREEN ── */
-  #upload-screen {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2rem;
-    padding: 2rem;
-  }
+/* ── LEFT PANEL: TOC ── */
+#toc-panel { width:var(--panel-w); min-width:var(--panel-w); background:var(--surface); border-right:.5px solid var(--border); display:flex; flex-direction:column; overflow:hidden; transition:width .22s ease,min-width .22s ease; }
+#toc-panel.collapsed { width:0; min-width:0; }
+.panel-header { padding:.7rem .85rem .55rem; border-bottom:.5px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; white-space:nowrap; }
+.panel-title { font-size:.65rem; font-family:sans-serif; color:var(--muted); letter-spacing:.1em; text-transform:uppercase; }
+.panel-close { background:none; border:none; color:var(--muted); cursor:pointer; font-size:.8rem; padding:2px 4px; }
+.panel-close:hover { color:var(--text); }
+#toc-list { flex:1; overflow-y:auto; padding:.4rem 0; scrollbar-width:thin; scrollbar-color:var(--surface3) transparent; }
+#toc-list::-webkit-scrollbar { width:3px; }
+#toc-list::-webkit-scrollbar-thumb { background:var(--surface3); border-radius:3px; }
+.toc-item { display:flex; align-items:flex-start; gap:7px; padding:.42rem .85rem; cursor:pointer; border-left:2px solid transparent; transition:all .14s; }
+.toc-item:hover { background:rgba(108,99,255,.07); }
+.toc-item.active { border-left-color:var(--accent); background:rgba(108,99,255,.1); }
+.toc-num { font-size:.6rem; font-family:sans-serif; color:var(--muted2); padding-top:2px; flex-shrink:0; font-variant-numeric:tabular-nums; min-width:18px; }
+.toc-label { font-size:.72rem; font-family:sans-serif; color:var(--muted); line-height:1.35; word-break:break-word; }
+.toc-item.active .toc-label { color:var(--text); }
+.toc-empty { padding:1.2rem .85rem; font-size:.7rem; font-family:sans-serif; color:var(--muted2); line-height:1.5; text-align:center; }
 
-  .logo { font-size: clamp(2rem, 5vw, 3rem); letter-spacing: -0.02em; }
-  .logo span { color: var(--accent); }
+/* ── CENTER: Word stage with sticky pivot ── */
+.word-stage { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; position:relative; padding:1.5rem; overflow:hidden; min-width:0; }
+.side-toggle { position:absolute; top:50%; transform:translateY(-50%); background:var(--surface2); border:.5px solid var(--border2); color:var(--muted); cursor:pointer; font-size:.65rem; width:14px; height:38px; display:flex; align-items:center; justify-content:center; z-index:10; transition:all .14s; }
+.side-toggle:hover { color:var(--text); background:var(--surface3); }
+#toc-toggle { left:0; border-radius:0 4px 4px 0; }
+#mini-toggle { right:0; border-radius:4px 0 0 4px; }
 
-  .tagline {
-    font-size: 0.85rem;
-    color: var(--muted);
-    font-family: sans-serif;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
+/* Sticky pivot word display */
+.word-frame {
+  position: relative;
+  width: min(560px, 90%);
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(108,99,255,.13);
+  border-radius: 14px;
+  overflow: hidden;
+}
+/* Pivot marker — fixed at 30% from left */
+.pivot-line {
+  position: absolute;
+  left: 30%;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: rgba(108,99,255,.18);
+  pointer-events: none;
+  z-index: 2;
+}
+.pivot-line::before, .pivot-line::after {
+  content: '';
+  position: absolute;
+  left: 50%; transform: translateX(-50%);
+  width: 2px; height: 8px;
+  background: var(--accent);
+  opacity: .6; border-radius: 2px;
+}
+.pivot-line::before { top: -1px; }
+.pivot-line::after { bottom: -1px; }
 
-  .upload-zone {
-    width: min(400px, 90vw);
-    border: 1.5px dashed rgba(108,99,255,0.35);
-    border-radius: 24px;
-    padding: 3rem 2rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1.2rem;
-    cursor: pointer;
-    background: rgba(108,99,255,0.04);
-    transition: all 0.2s;
-  }
-  .upload-zone:hover, .upload-zone.drag {
-    border-color: var(--accent);
-    background: rgba(108,99,255,0.1);
-    transform: translateY(-2px);
-  }
+/* The word rendered as positioned layers around fixed pivot */
+#word-container {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  /* pivot letter sits at left:30% of .word-frame */
+}
+#word-pre  { font-size: clamp(24px,4vw,56px); font-weight:400; color:var(--muted); letter-spacing:-.01em; line-height:1; text-align:right; }
+#word-piv  { font-size: clamp(24px,4vw,56px); font-weight:700; color:var(--accent); letter-spacing:-.01em; line-height:1; }
+#word-post { font-size: clamp(24px,4vw,56px); font-weight:400; color:var(--text);   letter-spacing:-.01em; line-height:1; }
 
-  .upload-icon {
-    width: 64px; height: 64px;
-    background: rgba(108,99,255,0.15);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 2rem;
-  }
+.wpm-badge { position:absolute; bottom:1.1rem; left:50%; transform:translateX(-50%); font-size:.7rem; font-family:sans-serif; color:var(--muted); background:var(--surface2); padding:4px 11px; border-radius:20px; border:.5px solid var(--border); font-variant-numeric:tabular-nums; white-space:nowrap; }
 
-  .upload-zone strong { font-size: 1.1rem; font-family: sans-serif; }
-  .upload-zone p { font-size: 0.85rem; color: var(--muted); font-family: sans-serif; text-align: center; line-height: 1.6; }
+/* ── RIGHT PANEL: Page Minimap ── */
+#mini-panel { width:var(--mini-w); min-width:var(--mini-w); background:var(--surface); border-left:.5px solid var(--border); display:flex; flex-direction:column; overflow:hidden; transition:width .22s ease,min-width .22s ease; }
+#mini-panel.collapsed { width:0; min-width:0; }
+#mini-panel .panel-header { justify-content:center; }
+.mini-body { flex:1; display:flex; flex-direction:column; align-items:center; padding:.6rem .5rem; gap:.45rem; overflow:hidden; }
+.mini-page-label { font-size:.65rem; font-family:sans-serif; color:var(--muted); font-variant-numeric:tabular-nums; text-align:center; flex-shrink:0; }
 
-  #file-input { display: none; }
+/* Page canvas container */
+.page-canvas-wrap {
+  flex: 1;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: 6px;
+  border: .5px solid var(--border2);
+  background: #1a1a1a;
+  cursor: pointer;
+}
+#page-canvas { display:block; width:100%; height:100%; object-fit:contain; }
+/* Highlight overlay — a horizontal band showing current word position */
+#page-highlight {
+  position: absolute;
+  left: 0; right: 0;
+  background: rgba(108,99,255,.28);
+  border-top: 1.5px solid rgba(108,99,255,.7);
+  border-bottom: 1.5px solid rgba(108,99,255,.7);
+  pointer-events: none;
+  transition: top .12s ease, height .12s ease;
+}
+.mini-chapter-name { font-size:.6rem; font-family:sans-serif; color:var(--accent); text-align:center; line-height:1.3; padding:0 3px; word-break:break-word; flex-shrink:0; min-height:2em; }
 
-  .tips {
-    display: flex;
-    gap: 1rem;
-    font-size: 0.78rem;
-    color: var(--muted);
-    font-family: sans-serif;
-    flex-wrap: wrap;
-    justify-content: center;
-    max-width: 380px;
-    text-align: center;
-    line-height: 1.7;
-  }
+/* ── CONTROLS ── */
+.controls { background:var(--surface); border-top:.5px solid var(--border); padding:.7rem 1.25rem .9rem; flex-shrink:0; }
+.progress-bar-wrap { height:44px; background:transparent; margin-bottom:.55rem; cursor:pointer; position:relative; display:flex; align-items:center; touch-action:none; }
+.progress-bar-track { position:absolute; left:0; right:0; height:6px; background:var(--surface2); border-radius:6px; border:.5px solid var(--border); overflow:hidden; pointer-events:none; }
+.progress-bar-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); border-radius:6px; width:0%; }
+.progress-bar-thumb { position:absolute; width:18px; height:18px; background:#fff; border-radius:50%; top:50%; transform:translate(-50%,-50%); box-shadow:0 2px 8px rgba(0,0,0,.5); pointer-events:none; left:0%; }
+.wpm-row { display:flex; align-items:center; gap:6px; margin-bottom:.65rem; overflow-x:auto; scrollbar-width:none; padding-bottom:2px; }
+.wpm-row::-webkit-scrollbar { display:none; }
+.wpm-label { font-size:.66rem; font-family:sans-serif; color:var(--muted); white-space:nowrap; flex-shrink:0; }
+.wpm-btn { flex-shrink:0; font-size:.72rem; font-family:sans-serif; padding:5px 10px; border-radius:20px; border:.5px solid var(--border); background:var(--surface2); color:var(--muted); cursor:pointer; transition:all .14s; font-variant-numeric:tabular-nums; }
+.wpm-btn:hover { border-color:rgba(108,99,255,.4); color:var(--text); }
+.wpm-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+.btn-row { display:flex; align-items:center; justify-content:center; gap:1rem; }
+.ctrl-btn { background:var(--surface2); border:.5px solid var(--border); color:var(--muted); border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .14s; }
+.ctrl-btn:hover { color:var(--text); border-color:var(--border2); }
+.ctrl-btn:active { transform:scale(.93); }
+.skip-btn { width:40px; height:40px; font-size:.85rem; }
+.play-btn { width:60px; height:60px; border-radius:50%; background:var(--accent); border:none; font-size:1.45rem; color:#fff; cursor:pointer; box-shadow:0 6px 22px rgba(108,99,255,.45); transition:all .14s; }
+.play-btn:hover { background:#7b73ff; }
+.play-btn:active { transform:scale(.93); box-shadow:none; }
+.kb-hint { text-align:center; font-size:.62rem; color:var(--muted2); font-family:sans-serif; margin-top:.45rem; }
 
-  #error-msg {
-    display: none;
-    color: var(--accent2);
-    font-size: 0.85rem;
-    font-family: sans-serif;
-    text-align: center;
-    padding: 0.5rem 1rem;
-    background: rgba(255,101,132,0.1);
-    border-radius: 8px;
-  }
-
-  /* ── READER SCREEN ── */
-  #reader-screen {
-    display: none;
-    flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
-  }
-
-  .top-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.85rem 1.5rem;
-    border-bottom: 0.5px solid var(--border);
-    background: var(--surface);
-    flex-shrink: 0;
-    gap: 1rem;
-  }
-
-  .back-btn {
-    background: none; border: none; color: var(--muted); cursor: pointer;
-    font-size: 1.4rem; padding: 4px; line-height: 1;
-    transition: color 0.15s;
-  }
-  .back-btn:hover { color: var(--text); }
-
-  .doc-title {
-    font-size: 0.82rem; color: var(--muted); font-family: sans-serif;
-    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    text-align: center;
-  }
-
-  .progress-text {
-    font-size: 0.78rem; color: var(--muted); font-family: sans-serif;
-    font-variant-numeric: tabular-nums; white-space: nowrap;
-  }
-
-  /* ── WORD STAGE ── */
-  .word-stage {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    padding: 2rem;
-    overflow: hidden;
-  }
-
-  .focus-frame {
-    position: absolute;
-    width: min(600px, 88vw);
-    height: 90px;
-    border: 1.5px solid rgba(108,99,255,0.18);
-    border-radius: 16px;
-    pointer-events: none;
-  }
-  .focus-frame::before, .focus-frame::after {
-    content: '';
-    position: absolute;
-    top: -10px;
-    width: 2px;
-    height: 8px;
-    background: var(--accent);
-    opacity: 0.7;
-    border-radius: 2px;
-  }
-  .focus-frame::before { left: 28%; }
-  .focus-frame::after  { right: calc(72% - 2px); }
-
-  #word-display {
-    font-size: var(--word-size);
-    font-weight: 400;
-    letter-spacing: -0.01em;
-    text-align: center;
-    z-index: 1;
-    line-height: 1;
-    min-height: 1.2em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  #word-display .pv { color: var(--accent); font-weight: 700; }
-  #word-display .pre { color: var(--muted); }
-
-  .wpm-live {
-    position: absolute;
-    bottom: 2rem; right: 1.5rem;
-    font-size: 0.75rem; font-family: sans-serif;
-    color: var(--muted);
-    background: var(--surface2);
-    padding: 5px 12px;
-    border-radius: 20px;
-    border: 0.5px solid var(--border);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .page-chip {
-    position: absolute;
-    bottom: 2rem; left: 1.5rem;
-    font-size: 0.72rem; font-family: sans-serif;
-    color: var(--muted);
-    background: var(--surface2);
-    padding: 5px 12px;
-    border-radius: 20px;
-    border: 0.5px solid var(--border);
-  }
-
-  /* ── CONTROLS ── */
-  .controls {
-    background: var(--surface);
-    border-top: 0.5px solid var(--border);
-    padding: 1rem 1.5rem 1.25rem;
-    flex-shrink: 0;
-  }
-
-  .progress-bar-wrap {
-    height: 44px;
-    background: transparent;
-    margin-bottom: 0.75rem;
-    cursor: pointer;
-    position: relative;
-    display: flex;
-    align-items: center;
-    touch-action: none;
-  }
-  .progress-bar-track {
-    position: absolute;
-    left: 0; right: 0;
-    height: 8px;
-    background: var(--surface2);
-    border-radius: 8px;
-    border: 0.5px solid var(--border);
-    overflow: hidden;
-    pointer-events: none;
-  }
-  .progress-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--accent), var(--accent2));
-    border-radius: 8px;
-    width: 0%;
-    transition: width 0.12s linear;
-  }
-  .progress-bar-thumb {
-    position: absolute;
-    width: 20px; height: 20px;
-    background: #fff;
-    border-radius: 50%;
-    top: 50%; transform: translate(-50%, -50%);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-    pointer-events: none;
-    left: 0%;
-    transition: left 0.12s linear;
-  }
-
-  .wpm-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 1rem;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding-bottom: 2px;
-  }
-  .wpm-row::-webkit-scrollbar { display: none; }
-  .wpm-label {
-    font-size: 0.72rem; font-family: sans-serif; color: var(--muted);
-    white-space: nowrap; flex-shrink: 0;
-  }
-
-  .wpm-btn {
-    flex-shrink: 0;
-    font-size: 0.78rem; font-family: sans-serif;
-    padding: 6px 13px;
-    border-radius: 20px;
-    border: 0.5px solid var(--border);
-    background: var(--surface2);
-    color: var(--muted);
-    cursor: pointer;
-    transition: all 0.15s;
-    font-variant-numeric: tabular-nums;
-  }
-  .wpm-btn:hover { border-color: rgba(108,99,255,0.4); color: var(--text); }
-  .wpm-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-
-  .btn-row {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1.25rem;
-  }
-
-  .ctrl-btn {
-    background: var(--surface2);
-    border: 0.5px solid var(--border);
-    color: var(--text);
-    border-radius: 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s;
-    font-size: 0.9rem;
-    color: var(--muted);
-  }
-  .ctrl-btn:hover { border-color: rgba(108,99,255,0.4); color: var(--text); }
-  .ctrl-btn:active { transform: scale(0.93); }
-  .skip-btn { width: 46px; height: 46px; }
-  .restart-btn { width: 46px; height: 46px; font-size: 1rem; }
-
-  .play-btn {
-    width: 68px; height: 68px;
-    border-radius: 50%;
-    background: var(--accent);
-    border: none;
-    font-size: 1.6rem;
-    color: #fff;
-    cursor: pointer;
-    box-shadow: 0 6px 28px rgba(108,99,255,0.45);
-    transition: all 0.15s;
-  }
-  .play-btn:hover { background: #7b73ff; box-shadow: 0 8px 32px rgba(108,99,255,0.55); }
-  .play-btn:active { transform: scale(0.93); box-shadow: none; }
-
-  /* ── LOADING ── */
-  #loading-overlay {
-    position: fixed; inset: 0;
-    background: var(--bg);
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1.25rem;
-    z-index: 999;
-  }
-  .spinner {
-    width: 40px; height: 40px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.75s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-msg { font-size: 0.9rem; color: var(--muted); font-family: sans-serif; }
-  .loading-sub { font-size: 0.75rem; color: rgba(240,238,255,0.25); font-family: sans-serif; }
-
-  /* keyboard hint */
-  .kb-hint {
-    text-align: center;
-    font-size: 0.7rem;
-    color: rgba(240,238,255,0.2);
-    font-family: sans-serif;
-    margin-top: 0.6rem;
-    letter-spacing: 0.03em;
-  }
+/* LOADING */
+#loading-overlay { position:fixed; inset:0; background:var(--bg); display:none; flex-direction:column; align-items:center; justify-content:center; gap:1.25rem; z-index:999; }
+.spinner { width:36px; height:36px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .75s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.loading-msg { font-size:.88rem; color:var(--muted); font-family:sans-serif; }
+.loading-sub { font-size:.7rem; color:var(--muted2); font-family:sans-serif; }
 </style>
 </head>
 <body>
@@ -372,46 +185,70 @@
 <div id="upload-screen">
   <div class="logo">Speed<span>Read</span></div>
   <div class="tagline">Kelime kelime — ışık hızında</div>
-
   <div class="upload-zone" id="drop-zone">
     <div class="upload-icon">📄</div>
     <strong>PDF Dosyası Yükle</strong>
     <p>Dosyayı buraya sürükle bırak<br>ya da tıkla ve seç</p>
   </div>
-
   <div id="error-msg"></div>
-
-  <div class="tips">
-    Pivot okuma tekniği: Her kelimedeki <span style="color:var(--accent);font-weight:600">mor harf</span> gözünün odaklandığı nokta. 
-    Beyin zamanla bu noktayı işlemeye alışır ve hız dramatik artar.
-  </div>
+  <div class="tips">Pivot okuma: her kelimedeki <span style="color:var(--accent);font-weight:600">mor harf</span> gözün sabit tuttuğu nokta.</div>
 </div>
-
 <input type="file" id="file-input" accept="application/pdf">
 
 <!-- READER -->
 <div id="reader-screen">
   <div class="top-bar">
-    <button class="back-btn" id="back-btn" title="Geri">&#8592;</button>
+    <button class="back-btn" id="back-btn">&#8592;</button>
     <div class="doc-title" id="doc-title">—</div>
     <div class="progress-text" id="progress-text">0 / 0</div>
   </div>
 
-  <div class="word-stage">
-    <div class="focus-frame"></div>
-    <div id="word-display"><span class="pre"></span><span class="pv">—</span><span></span></div>
-    <div class="wpm-live" id="wpm-live">200 WPM</div>
-    <div class="page-chip" id="page-chip">Sayfa —</div>
+  <div class="reader-body">
+    <!-- LEFT -->
+    <div id="toc-panel">
+      <div class="panel-header">
+        <span class="panel-title">İçindekiler</span>
+        <button class="panel-close" id="toc-close">✕</button>
+      </div>
+      <div id="toc-list"></div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="word-stage">
+      <button class="side-toggle" id="toc-toggle">&#9664;</button>
+
+      <div class="word-frame">
+        <div class="pivot-line"></div>
+        <div id="word-container">
+          <span id="word-pre"></span><span id="word-piv"></span><span id="word-post"></span>
+        </div>
+      </div>
+
+      <div class="wpm-badge" id="wpm-badge">200 WPM</div>
+      <button class="side-toggle" id="mini-toggle">&#9654;</button>
+    </div>
+
+    <!-- RIGHT: minimap -->
+    <div id="mini-panel">
+      <div class="panel-header">
+        <span class="panel-title">Sayfa</span>
+      </div>
+      <div class="mini-body">
+        <div class="mini-page-label" id="mini-page-label">— / —</div>
+        <div class="page-canvas-wrap" id="page-canvas-wrap">
+          <canvas id="page-canvas"></canvas>
+          <div id="page-highlight"></div>
+        </div>
+        <div class="mini-chapter-name" id="mini-chapter-name"></div>
+      </div>
+    </div>
   </div>
 
   <div class="controls">
     <div class="progress-bar-wrap" id="pb-wrap">
-      <div class="progress-bar-track">
-        <div class="progress-bar-fill" id="pb-fill"></div>
-      </div>
+      <div class="progress-bar-track"><div class="progress-bar-fill" id="pb-fill"></div></div>
       <div class="progress-bar-thumb" id="pb-thumb"></div>
     </div>
-
     <div class="wpm-row">
       <span class="wpm-label">WPM:</span>
       <button class="wpm-btn active" data-wpm="200">200</button>
@@ -422,18 +259,15 @@
       <button class="wpm-btn" data-wpm="700">700</button>
       <button class="wpm-btn" data-wpm="800">800</button>
     </div>
-
     <div class="btn-row">
-      <button class="ctrl-btn skip-btn" id="skip-back" title="50 kelime geri">&#10094;&#10094;</button>
+      <button class="ctrl-btn skip-btn" id="skip-back">&#10094;&#10094;</button>
       <button class="ctrl-btn play-btn" id="play-btn">&#9654;</button>
-      <button class="ctrl-btn skip-btn" id="skip-fwd" title="50 kelime ileri">&#10095;&#10095;</button>
+      <button class="ctrl-btn skip-btn" id="skip-fwd">&#10095;&#10095;</button>
     </div>
-
-    <div class="kb-hint">Boşluk: oynat/durdur &nbsp;·&nbsp; ← →: 50 kelime atla &nbsp;·&nbsp; ↑ ↓: hız</div>
+    <div class="kb-hint">Boşluk: oynat/durdur &nbsp;·&nbsp; ← →: 50 kelime &nbsp;·&nbsp; ↑ ↓: hız</div>
   </div>
 </div>
 
-<!-- LOADING -->
 <div id="loading-overlay">
   <div class="spinner"></div>
   <div class="loading-msg" id="loading-msg">PDF işleniyor...</div>
@@ -441,259 +275,476 @@
 </div>
 
 <script>
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const $ = id => document.getElementById(id);
 
-  const $ = id => document.getElementById(id);
+// ═══ STATE ═══
+let words = [], wordIndex = 0, wpm = 200;
+let playing = false, timer = null;
+let pageBreaks = [], tocEntries = [], totalPages = 0;
+let pdfDoc = null;
 
-  let words = [], wordIndex = 0, wpm = 200;
-  let playing = false, timer = null;
-  let pageBreaks = []; // cumulative word counts per page
+// Per-word position info: { page, yRatio } — y position as fraction of page height
+let wordPositions = [];
 
-  // ── Pivot index (RSVP optimal fixation point) ──
-  function pivotIdx(word) {
-    const n = word.length;
-    if (n <= 1) return 0;
-    if (n <= 5) return 1;
-    if (n <= 9) return 2;
-    return 3;
+// Minimap state
+let renderedPageNum = -1;
+let miniScale = 1;
+
+// ═══ PIVOT / WORD RENDER ═══
+// Pivot index: the "optimal recognition point"
+function pivotIdx(w) {
+  const n = w.length;
+  if (n <= 1) return 0; if (n <= 5) return 1; if (n <= 9) return 2; return 3;
+}
+
+// Sticky pivot: word-pre right-aligns to pivot line, word-piv sits on it, word-post continues right
+// word-frame is min(560px,90%); pivot-line is at left:30%
+// We position #word-container so that the LEFT EDGE of #word-piv is always at 30%
+function renderWord(w) {
+  if (!w) return;
+  w = w.replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '');
+  if (!w) return;
+  const p = pivotIdx(w);
+  const pre  = w.slice(0, p);
+  const piv  = w[p] || '';
+  const post = w.slice(p + 1);
+  $('word-pre').textContent  = pre;
+  $('word-piv').textContent  = piv;
+  $('word-post').textContent = post;
+  positionWordAtPivot();
+}
+
+function positionWordAtPivot() {
+  const frame = document.querySelector('.word-frame');
+  const container = $('word-container');
+  const preEl  = $('word-pre');
+  if (!frame) return;
+  const frameW = frame.clientWidth;
+  const pivotX = frameW * 0.30; // 30% from left
+  const preW   = preEl.offsetWidth;
+  // left edge of piv letter should be at pivotX
+  // container left = pivotX - preW
+  const left = pivotX - preW;
+  container.style.position = 'absolute';
+  container.style.left = left + 'px';
+  container.style.top  = '50%';
+  container.style.transform = 'translateY(-50%)';
+  container.style.whiteSpace = 'nowrap';
+}
+
+// ═══ PROGRESS ═══
+function pageOfWord(idx) {
+  for (let i = 0; i < pageBreaks.length; i++) if (idx <= pageBreaks[i]) return i;
+  return pageBreaks.length - 1;
+}
+
+function activeTocIdx(idx) {
+  let ai = -1;
+  for (let i = 0; i < tocEntries.length; i++) {
+    if (tocEntries[i].wordIndex <= idx) ai = i; else break;
   }
+  return ai;
+}
 
-  function renderWord(w) {
-    if (!w) return;
-    // Strip non-printable/zero-width chars
-    w = w.replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '');
-    if (!w) return;
-    const p = pivotIdx(w);
-    const pre  = w.slice(0, p);
-    const piv  = w[p] || '';
-    const post = w.slice(p + 1);
-    $('word-display').innerHTML =
-      `<span class="pre">${pre}</span><span class="pv">${piv}</span><span>${post}</span>`;
+function updateProgress() {
+  if (!words.length) return;
+  const pct = wordIndex / words.length * 100;
+  const ps  = pct.toFixed(2) + '%';
+  $('pb-fill').style.width = ps;
+  $('pb-thumb').style.left = ps;
+  $('progress-text').textContent = wordIndex + ' / ' + words.length;
+
+  const page = pageOfWord(wordIndex);
+  $('mini-page-label').textContent = 'Sayfa ' + (page+1) + ' / ' + totalPages;
+
+  // Minimap: render page if changed, update highlight
+  updateMinimap(page);
+
+  // TOC highlight
+  const ai = activeTocIdx(wordIndex);
+  document.querySelectorAll('.toc-item').forEach((el, i) => el.classList.toggle('active', i === ai));
+  if (ai >= 0 && tocEntries[ai]) {
+    $('mini-chapter-name').textContent = tocEntries[ai].label;
+    const activeEl = document.querySelectorAll('.toc-item')[ai];
+    if (activeEl) activeEl.scrollIntoView({ block:'nearest', behavior:'smooth' });
+  } else {
+    $('mini-chapter-name').textContent = '';
   }
+}
 
-  function updateProgress() {
-    if (!words.length) return;
-    const pct = (wordIndex / words.length * 100).toFixed(2);
-    $('pb-fill').style.width = pct + '%';
-    $('pb-thumb').style.left = pct + '%';
-    $('progress-text').textContent = wordIndex + ' / ' + words.length;
+// ═══ MINIMAP — real page render + word highlight ═══
+let renderingPage = false;
+async function updateMinimap(pageNum) {
+  if (!pdfDoc) return;
+  const wrap = $('page-canvas-wrap');
+  const canvas = $('page-canvas');
+  const highlight = $('page-highlight');
+  const wrapH = wrap.clientHeight || 200;
+  const wrapW = wrap.clientWidth  || 120;
 
-    // find current page
-    let page = 0;
-    for (let i = 0; i < pageBreaks.length; i++) {
-      if (wordIndex <= pageBreaks[i]) { page = i; break; }
-      page = i;
-    }
-    $('page-chip').textContent = 'Sayfa ' + (page + 1) + ' / ' + pageBreaks.length;
-  }
-
-  function tick() {
-    if (wordIndex >= words.length) {
-      playing = false;
-      $('play-btn').innerHTML = '&#9654;';
-      $('play-btn').style.background = 'var(--accent)';
-      return;
-    }
-    renderWord(words[wordIndex]);
-    updateProgress();
-    wordIndex++;
-    timer = setTimeout(tick, Math.round(60000 / wpm));
-  }
-
-  function play() {
-    if (!words.length) return;
-    if (wordIndex >= words.length) wordIndex = 0;
-    playing = true;
-    $('play-btn').innerHTML = '&#9646;&#9646;';
-    tick();
-  }
-
-  function pause() {
-    clearTimeout(timer);
-    playing = false;
-    $('play-btn').innerHTML = '&#9654;';
-  }
-
-  function togglePlay() { playing ? pause() : play(); }
-
-  function setWpm(val) {
-    wpm = val;
-    $('wpm-live').textContent = val + ' WPM';
-    document.querySelectorAll('.wpm-btn').forEach(b => {
-      b.classList.toggle('active', +b.dataset.wpm === val);
-    });
-  }
-
-  function jump(delta) {
-    pause();
-    wordIndex = Math.max(0, Math.min(words.length - 1, wordIndex + delta));
-    renderWord(words[wordIndex]);
-    updateProgress();
-  }
-
-  // ── Events ──
-  document.querySelectorAll('.wpm-btn').forEach(b =>
-    b.addEventListener('click', () => setWpm(+b.dataset.wpm))
-  );
-  $('play-btn').addEventListener('click', togglePlay);
-  $('skip-back').addEventListener('click', () => jump(-50));
-  $('skip-fwd').addEventListener('click', () => jump(50));
-
-  function seekTo(clientX) {
-    const r = $('pb-wrap').getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
-    wordIndex = Math.floor(pct * words.length);
-    if (wordIndex >= words.length) wordIndex = words.length - 1;
-    renderWord(words[wordIndex]);
-    updateProgress();
-  }
-  let pbDragging = false;
-  $('pb-wrap').addEventListener('mousedown', e => {
-    pbDragging = true;
-    pause();
-    seekTo(e.clientX);
-  });
-  document.addEventListener('mousemove', e => {
-    if (!pbDragging) return;
-    seekTo(e.clientX);
-  });
-  document.addEventListener('mouseup', () => { pbDragging = false; });
-  $('pb-wrap').addEventListener('touchstart', e => {
-    pbDragging = true;
-    pause();
-    seekTo(e.touches[0].clientX);
-  }, { passive: true });
-  document.addEventListener('touchmove', e => {
-    if (!pbDragging) return;
-    seekTo(e.touches[0].clientX);
-  }, { passive: true });
-  document.addEventListener('touchend', () => { pbDragging = false; });
-
-  $('back-btn').addEventListener('click', () => {
-    pause();
-    words = []; wordIndex = 0; pageBreaks = [];
-    $('reader-screen').style.display = 'none';
-    $('upload-screen').style.display = 'flex';
-    $('error-msg').style.display = 'none';
-    $('file-input').value = '';
-    $('pb-fill').style.width = '0%';
-    $('progress-text').textContent = '0 / 0';
-  });
-
-  // Keyboard shortcuts
-  document.addEventListener('keydown', e => {
-    if ($('reader-screen').style.display === 'none') return;
-    if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
-    if (e.code === 'ArrowRight') jump(50);
-    if (e.code === 'ArrowLeft')  jump(-50);
-    if (e.code === 'ArrowUp') {
-      const speeds = [200,300,400,500,600,700,800];
-      const i = speeds.indexOf(wpm);
-      if (i < speeds.length - 1) setWpm(speeds[i + 1]);
-    }
-    if (e.code === 'ArrowDown') {
-      const speeds = [200,300,400,500,600,700,800];
-      const i = speeds.indexOf(wpm);
-      if (i > 0) setWpm(speeds[i - 1]);
-    }
-  });
-
-  // ── PDF Loading ──
-  async function loadPDF(file) {
-    $('loading-overlay').style.display = 'flex';
-    $('loading-msg').textContent = 'PDF yükleniyor...';
-    $('loading-sub').textContent = file.name;
-
+  // Render page image if page changed
+  if (pageNum !== renderedPageNum && !renderingPage) {
+    renderingPage = true;
     try {
-      const ab = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
-      const totalPages = pdf.numPages;
-      let allWords = [];
-      pageBreaks = [];
+      const page = await pdfDoc.getPage(pageNum + 1);
+      const viewport = page.getViewport({ scale: 1 });
+      // Scale to fit wrap width
+      miniScale = wrapW / viewport.width;
+      const scaledVP = page.getViewport({ scale: miniScale });
+      canvas.width  = scaledVP.width;
+      canvas.height = scaledVP.height;
+      canvas.style.width  = scaledVP.width  + 'px';
+      canvas.style.height = scaledVP.height + 'px';
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport: scaledVP }).promise;
+      renderedPageNum = pageNum;
+    } catch(e) { /* ignore */ }
+    renderingPage = false;
+  }
 
-      for (let p = 1; p <= totalPages; p++) {
-        $('loading-msg').textContent = `Sayfa ${p} / ${totalPages} işleniyor...`;
-        const page = await pdf.getPage(p);
-        const tc = await page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false });
-        // Use x-coordinate gaps to detect word boundaries (handles char-by-char PDFs)
-        let pageText = '';
-        let prevX2 = null, prevY = null;
-        for (let k = 0; k < tc.items.length; k++) {
-          const item = tc.items[k];
-          if (!item.str) continue;
-          const x = item.transform ? item.transform[4] : null;
-          const y = item.transform ? item.transform[5] : null;
-          const iw = item.width || 0;
-          if (prevX2 !== null && x !== null) {
-            const gap = x - prevX2;
-            const newLine = prevY !== null && Math.abs(y - prevY) > 2;
-            if (newLine || gap > 1) pageText += ' ';
-          }
-          pageText += item.str;
-          prevX2 = x !== null ? x + iw : null;
-          prevY = y;
+  // Update highlight band based on current word's y position
+  if (wordIndex < wordPositions.length) {
+    const pos = wordPositions[wordIndex];
+    if (pos && pos.page === pageNum) {
+      const canvasH = canvas.height || wrapH;
+      // yRatio is top of the line (0=top, 1=bottom of page in PDF coords — PDF y is bottom-up so we flip)
+      const yPx = pos.yRatio * canvasH;
+      const lineH = Math.max(8, pos.lineHeightRatio * canvasH);
+      highlight.style.top    = Math.round(yPx) + 'px';
+      highlight.style.height = Math.round(lineH) + 'px';
+      highlight.style.display = 'block';
+    } else {
+      highlight.style.display = 'none';
+    }
+  }
+}
+
+// ═══ PLAYBACK ═══
+function tick() {
+  if (wordIndex >= words.length) { playing=false; $('play-btn').innerHTML='&#9654;'; return; }
+  renderWord(words[wordIndex]);
+  updateProgress();
+  wordIndex++;
+  timer = setTimeout(tick, Math.round(60000 / wpm));
+}
+function play() {
+  if (!words.length) return;
+  if (wordIndex >= words.length) wordIndex = 0;
+  playing = true; $('play-btn').innerHTML = '&#9646;&#9646;'; tick();
+}
+function pause() { clearTimeout(timer); playing=false; $('play-btn').innerHTML='&#9654;'; }
+function togglePlay() { playing ? pause() : play(); }
+
+function setWpm(val) {
+  wpm = val;
+  $('wpm-badge').textContent = val + ' WPM';
+  document.querySelectorAll('.wpm-btn').forEach(b => b.classList.toggle('active', +b.dataset.wpm === val));
+}
+
+function jumpToWord(wi) {
+  pause();
+  wordIndex = Math.max(0, Math.min(words.length-1, wi));
+  renderWord(words[wordIndex]); updateProgress();
+}
+function jump(d) { jumpToWord(wordIndex + d); }
+
+// ═══ EVENTS ═══
+document.querySelectorAll('.wpm-btn').forEach(b => b.addEventListener('click', () => setWpm(+b.dataset.wpm)));
+$('play-btn').addEventListener('click', togglePlay);
+$('skip-back').addEventListener('click', () => jump(-50));
+$('skip-fwd').addEventListener('click', () => jump(50));
+
+function seekTo(clientX) {
+  const r = $('pb-wrap').getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (clientX-r.left)/r.width));
+  wordIndex = Math.min(words.length-1, Math.floor(pct*words.length));
+  renderWord(words[wordIndex]); updateProgress();
+}
+let pbDrag=false;
+$('pb-wrap').addEventListener('mousedown', e => { pbDrag=true; pause(); seekTo(e.clientX); });
+document.addEventListener('mousemove', e => { if(pbDrag) seekTo(e.clientX); });
+document.addEventListener('mouseup', () => { pbDrag=false; });
+$('pb-wrap').addEventListener('touchstart', e => { pbDrag=true; pause(); seekTo(e.touches[0].clientX); },{passive:true});
+document.addEventListener('touchmove', e => { if(pbDrag) seekTo(e.touches[0].clientX); },{passive:true});
+document.addEventListener('touchend', () => { pbDrag=false; });
+
+// Minimap click → seek to page
+$('page-canvas-wrap').addEventListener('click', e => {
+  if (!pdfDoc || renderedPageNum < 0) return;
+  const canvas = $('page-canvas');
+  const r = canvas.getBoundingClientRect();
+  const yFrac = (e.clientY - r.top) / r.height;
+  // Find word on this page at this y fraction
+  const pg = renderedPageNum;
+  const start = pg > 0 ? pageBreaks[pg-1]+1 : 0;
+  const end   = pageBreaks[pg] ?? words.length-1;
+  const target = start + Math.floor(yFrac * (end - start));
+  jumpToWord(target);
+});
+
+let tocOpen=true, miniOpen=true;
+$('toc-close').addEventListener('click', () => { tocOpen=false; $('toc-panel').classList.add('collapsed'); });
+$('toc-toggle').addEventListener('click', () => { tocOpen=!tocOpen; $('toc-panel').classList.toggle('collapsed',!tocOpen); });
+$('mini-toggle').addEventListener('click', () => { miniOpen=!miniOpen; $('mini-panel').classList.toggle('collapsed',!miniOpen); });
+
+$('back-btn').addEventListener('click', () => {
+  pause(); words=[]; wordIndex=0; pageBreaks=[]; tocEntries=[]; totalPages=0; pdfDoc=null;
+  wordPositions=[]; renderedPageNum=-1;
+  $('reader-screen').style.display='none';
+  $('upload-screen').style.display='flex';
+  $('error-msg').style.display='none';
+  $('file-input').value='';
+  $('pb-fill').style.width='0%'; $('pb-thumb').style.left='0%';
+  $('toc-list').innerHTML='';
+  $('page-canvas').width=0; $('page-canvas').height=0;
+});
+
+document.addEventListener('keydown', e => {
+  if($('reader-screen').style.display==='none') return;
+  if(e.code==='Space'){e.preventDefault();togglePlay();}
+  if(e.code==='ArrowRight') jump(50);
+  if(e.code==='ArrowLeft')  jump(-50);
+  const sp=[200,300,400,500,600,700,800], i=sp.indexOf(wpm);
+  if(e.code==='ArrowUp'   && i<sp.length-1) setWpm(sp[i+1]);
+  if(e.code==='ArrowDown' && i>0)           setWpm(sp[i-1]);
+});
+
+window.addEventListener('resize', positionWordAtPivot);
+
+// ═══ TOC DETECTION (improved) ═══
+// Broad multi-language heading patterns
+const TOC_HEADING = [
+  // Turkish front matter
+  /^(giri[şs]|önsöz|sunus|sunum|takdim|te[şs]ekkür|ithaf|adanı[şs]|öz|özet|künye|yayıncı notu?)$/i,
+  /^(yazar\s*(notu?|hakkında|söz[ü])|çevirmen\s*(notu?|hakkında)|editör\s*notu?|hazırlayanın\s*notu?)$/i,
+  /^(çeviri|çevirmen|translator'?s?\s*note|author'?s?\s*note|publisher'?s?\s*note|editor'?s?\s*note)$/i,
+  // Turkish back matter
+  /^(sonuç|de[ğg]erlendirme|kapanı[şs]|epilog|kaynakça|kaynaklar|notlar|dipnotlar|dizin|bibliyografya|ekler?|ek\s*\d+|sözlük|glossary)$/i,
+  // English front/back matter
+  /^(introduction|preface|foreword|prologue|acknowledgements?|dedication|about\s+the\s+author|about\s+this\s+book)$/i,
+  /^(conclusion|afterword|epilogue|bibliography|references?|index|appendix\s*\w*|notes?|endnotes?|glossary)$/i,
+  // Numbered sections — Turkish
+  /^bölüm\s*\d+/i,
+  /^(birinci|ikinci|üçüncü|dördüncü|beşinci|altıncı|yedinci|sekizinci|dokuzuncu|onuncu|on\s+birinci|on\s+ikinci)\s*bölüm/i,
+  /^kısım\s*\d+/i,
+  /^k\.?\s*\d+[\s:.\-–]/i,
+  // Numbered sections — English
+  /^chapter\s*\d+/i,
+  /^part\s*[ivxlcdm\d]+/i,
+  /^section\s*\d+/i,
+  // Numeric prefixes "1." "1)" "I." "II." etc — require at least 2 chars after
+  /^\d{1,2}[\.\)]\s+\S{2}/,
+  /^[IVXLivxl]{1,4}[\.\)]\s+\S{2}/,
+  // All-caps short lines (common heading style in Turkish books)
+  /^[A-ZÇĞİÖŞÜ\s]{4,40}$/,
+];
+
+function isHeading(text) {
+  const t = text.trim();
+  if (!t || t.length < 2 || t.length > 100) return false;
+  return TOC_HEADING.some(r => r.test(t));
+}
+
+function detectTOC(pageTexts) {
+  const entries = [];
+
+  // 1. Look for an explicit TOC page in first 15 pages
+  for (let pi = 0; pi < Math.min(pageTexts.length, 15); pi++) {
+    const text = pageTexts[pi];
+    if (/içindekiler|table\s+of\s+contents/i.test(text)) {
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        // "Title ......... 12" or "Title    12"
+        const m = line.match(/^(.+?)[\s\.]{2,}(\d+)\s*$/) || line.match(/^(.+?)\s{3,}(\d+)\s*$/);
+        if (m) {
+          const label = m[1].trim(), pg = parseInt(m[2]) - 1;
+          if (label.length > 1 && pg >= 0 && pg < pageTexts.length)
+            entries.push({ label, pageIndex: pg });
         }
-        const rawWords = pageText.split(/\s+/).filter(w => w.trim().length > 0);
-        // Merge isolated single chars that are likely split words (e.g. "h e l l o")
-        const pw = [];
-        let buf = '';
-        for (let m = 0; m < rawWords.length; m++) {
-          const cur = rawWords[m];
-          const next = rawWords[m + 1];
-          if (cur.length === 1 && next && next.length === 1) {
-            // accumulate
-            buf += cur;
-          } else if (cur.length === 1 && buf.length > 0) {
-            buf += cur;
-            pw.push(buf);
-            buf = '';
-          } else {
-            if (buf) { pw.push(buf); buf = ''; }
-            pw.push(cur);
-          }
-        }
-        if (buf) pw.push(buf);
-        allWords = allWords.concat(pw);
-        pageBreaks.push(allWords.length - 1);
+      }
+      if (entries.length > 2) return entries;
+    }
+  }
+
+  // 2. Scan pages for heading-like lines
+  const seen = new Set();
+  for (let pi = 0; pi < pageTexts.length; pi++) {
+    const lines = pageTexts[pi].split('\n').map(l => l.trim()).filter(Boolean);
+    for (const line of lines) {
+      if (isHeading(line) && !seen.has(line.toLowerCase())) {
+        seen.add(line.toLowerCase());
+        entries.push({ label: line, pageIndex: pi });
+      }
+    }
+  }
+  return entries;
+}
+
+function buildTOCPanel() {
+  const list = $('toc-list');
+  list.innerHTML = '';
+  if (!tocEntries.length) {
+    // Page-list fallback
+    for (let p = 0; p < Math.min(totalPages, 200); p++) {
+      const el = document.createElement('div');
+      el.className = 'toc-item';
+      el.innerHTML = `<span class="toc-num">${p+1}</span><span class="toc-label">Sayfa ${p+1}</span>`;
+      const wi = p > 0 ? pageBreaks[p-1]+1 : 0;
+      el.addEventListener('click', () => jumpToWord(wi));
+      list.appendChild(el);
+    }
+    return;
+  }
+  tocEntries.forEach(e => {
+    const el = document.createElement('div');
+    el.className = 'toc-item';
+    el.innerHTML = `<span class="toc-num">${e.pageIndex+1}</span><span class="toc-label">${e.label}</span>`;
+    el.addEventListener('click', () => jumpToWord(e.wordIndex));
+    list.appendChild(el);
+  });
+}
+
+// ═══ PDF LOAD ═══
+async function loadPDF(file) {
+  $('loading-overlay').style.display = 'flex';
+  $('loading-msg').textContent = 'PDF yükleniyor...';
+  $('loading-sub').textContent = file.name;
+
+  try {
+    const ab = await file.arrayBuffer();
+    pdfDoc = await pdfjsLib.getDocument({ data: ab }).promise;
+    totalPages = pdfDoc.numPages;
+
+    let allWords = [], allPositions = [];
+    pageBreaks = [];
+    const pageTexts = [];
+
+    for (let p = 1; p <= totalPages; p++) {
+      $('loading-msg').textContent = `Sayfa ${p} / ${totalPages} işleniyor...`;
+      const page = await pdfDoc.getPage(p);
+      const viewport = page.getViewport({ scale: 1 });
+      const pageH = viewport.height;
+      const pageW = viewport.width;
+
+      const tc = await page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false });
+
+      // Coordinate-aware text assembly + position recording per item
+      // Group items into lines by y-coordinate proximity
+      const LINE_TOLERANCE = 3; // px
+      const lines = []; // each line: { y, items: [{str, x, x2, y, height}] }
+
+      for (const item of tc.items) {
+        if (!item.str || !item.str.trim()) continue;
+        const x  = item.transform[4];
+        const y  = item.transform[5]; // PDF bottom-up y
+        const h  = item.height || 12;
+        const iw = item.width  || 0;
+
+        // Find matching line
+        let lineIdx = lines.findIndex(l => Math.abs(l.y - y) < LINE_TOLERANCE);
+        if (lineIdx < 0) { lines.push({ y, items: [] }); lineIdx = lines.length-1; }
+        lines[lineIdx].items.push({ str: item.str, x, x2: x + iw, y, height: h });
       }
 
-      words = allWords;
-      wordIndex = 0;
-      $('doc-title').textContent = file.name.replace(/\.pdf$/i, '');
-      renderWord(words[0]);
-      updateProgress();
+      // Sort lines top-to-bottom (PDF y is bottom-up, so descending y = top)
+      lines.sort((a, b) => b.y - a.y);
 
-      $('loading-overlay').style.display = 'none';
-      $('upload-screen').style.display = 'none';
-      $('reader-screen').style.display = 'flex';
-    } catch (err) {
-      $('loading-overlay').style.display = 'none';
-      $('error-msg').textContent = '⚠ PDF okunamadı: ' + err.message;
-      $('error-msg').style.display = 'block';
+      let pageText = '';
+      const pageWords = [];
+      const pagePositions = [];
+
+      for (const line of lines) {
+        // Sort items left-to-right
+        line.items.sort((a, b) => a.x - b.x);
+
+        let lineText = '';
+        let prevX2 = null;
+        for (const item of line.items) {
+          if (prevX2 !== null && item.x - prevX2 > 1) lineText += ' ';
+          lineText += item.str;
+          prevX2 = item.x2;
+        }
+
+        const lineY   = line.y; // bottom of line in PDF coords
+        const lineH   = line.items.reduce((m, it) => Math.max(m, it.height), 10);
+        // Convert to top-down ratio: PDF y=0 is bottom, so top of line = lineY + lineH
+        // yRatio = (pageH - (lineY + lineH)) / pageH  => 0=top, 1=bottom
+        const yTop      = Math.max(0, pageH - (lineY + lineH));
+        const yRatio    = yTop / pageH;
+        const hRatio    = lineH / pageH;
+
+        pageText += lineText + '\n';
+
+        // Split line into words, assign position
+        const raw = lineText.split(/\s+/).filter(w => w.trim().length > 0);
+        const merged = mergeChars(raw);
+        for (const w of merged) {
+          pageWords.push(w);
+          pagePositions.push({ page: p-1, yRatio, lineHeightRatio: hRatio * 1.4 });
+        }
+      }
+
+      pageTexts.push(pageText);
+      allWords    = allWords.concat(pageWords);
+      allPositions = allPositions.concat(pagePositions);
+      pageBreaks.push(allWords.length - 1);
     }
+
+    words = allWords;
+    wordPositions = allPositions;
+    wordIndex = 0;
+    $('doc-title').textContent = file.name.replace(/\.pdf$/i, '');
+
+    $('loading-msg').textContent = 'İçindekiler oluşturuluyor...';
+    const rawToc = detectTOC(pageTexts);
+    tocEntries = rawToc.map(e => ({
+      label:     e.label,
+      pageIndex: e.pageIndex,
+      wordIndex: e.pageIndex > 0 ? pageBreaks[e.pageIndex-1]+1 : 0
+    }));
+
+    buildTOCPanel();
+
+    $('loading-overlay').style.display = 'none';
+    $('upload-screen').style.display = 'none';
+    $('reader-screen').style.display = 'flex';
+
+    renderWord(words[0]);
+    updateProgress();
+
+  } catch(err) {
+    $('loading-overlay').style.display = 'none';
+    $('error-msg').textContent = '⚠ PDF okunamadı: ' + err.message;
+    $('error-msg').style.display = 'block';
   }
+}
 
-  // Drop zone
-  const dz = $('drop-zone');
-  dz.addEventListener('click', () => $('file-input').click());
-  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
-  dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
-  dz.addEventListener('drop', e => {
-    e.preventDefault(); dz.classList.remove('drag');
-    const f = e.dataTransfer.files[0];
-    if (f && f.type === 'application/pdf') {
-      loadPDF(f);
-    } else {
-      $('error-msg').textContent = '⚠ Lütfen bir PDF dosyası yükleyin.';
-      $('error-msg').style.display = 'block';
-    }
-  });
+// Merge isolated single chars (handles char-by-char PDFs)
+function mergeChars(raw) {
+  const out = []; let buf = '';
+  for (let m = 0; m < raw.length; m++) {
+    const cur = raw[m], nxt = raw[m+1];
+    if (cur.length === 1 && nxt && nxt.length === 1) { buf += cur; }
+    else if (cur.length === 1 && buf.length > 0)     { out.push(buf + cur); buf = ''; }
+    else { if (buf) { out.push(buf); buf = ''; } out.push(cur); }
+  }
+  if (buf) out.push(buf);
+  return out;
+}
 
-  $('file-input').addEventListener('change', e => {
-    const f = e.target.files[0];
-    if (f) loadPDF(f);
-  });
+// Drop zone
+const dz = $('drop-zone');
+dz.addEventListener('click', () => $('file-input').click());
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type === 'application/pdf') loadPDF(f);
+  else { $('error-msg').textContent='⚠ Lütfen bir PDF dosyası yükleyin.'; $('error-msg').style.display='block'; }
+});
+$('file-input').addEventListener('change', e => { const f = e.target.files[0]; if(f) loadPDF(f); });
 </script>
 </body>
 </html>
